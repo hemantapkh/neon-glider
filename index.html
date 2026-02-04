@@ -1,190 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Neon Glider v2</title>
-<style>
-body{margin:0;padding:0;overflow:hidden;background:#0d0221;touch-action:none;font-family:'Segoe UI',sans-serif;user-select:none;-webkit-user-select:none}
-canvas{display:block;width:100%;height:100%}
-#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:opacity .3s}
-.score{position:absolute;top:40px;font-size:48px;color:rgba(255,255,255,1);font-weight:800;text-shadow:0 0 15px #f0f;z-index:10;font-style:italic}
-.msg{color:#fff;font-size:24px;text-transform:uppercase;letter-spacing:4px;text-shadow:0 0 20px #0ff;text-align:center;background:rgba(0,0,0,.6);padding:20px;border:1px solid #0ff;border-radius:10px;backdrop-filter:blur(5px)}
-.sub{font-size:14px;color:#0ff;margin-top:10px;letter-spacing:2px}
-.hidden{opacity:0;pointer-events:none}
-#btn{margin-top:20px;pointer-events:auto;background:linear-gradient(45deg,#0ff,#f0f);border:none;color:#fff;padding:15px 40px;font-weight:bold;text-transform:uppercase;letter-spacing:2px;cursor:pointer;clip-path:polygon(10% 0,100% 0,100% 70%,90% 100%,0 100%,0 30%)}
-#btn:active{transform:scale(.95)}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Glider v2</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="score" id="sc">0</div>
-<div id="ui">
-<div class="msg" id="msg">NEON GLIDER<div class="sub">HOLD TO ASCEND</div></div>
-<button id="btn">INIT_SYSTEM</button>
-</div>
-<canvas id="c"></canvas>
-<script>
-const c=document.getElementById('c'),ctx=c.getContext('2d'),ui=document.getElementById('ui'),msg=document.getElementById('msg'),sc=document.getElementById('sc'),btn=document.getElementById('btn');
-let w,h,dpr,st='S',fr=0,score=0,spd=0,shk=0;
-const p={x:0,y:0,vy:0,r:0},inpt={a:false},obs=[],part=[],ring=[];
-const AC=window.AudioContext||window.webkitAudioContext;
-let ax,mus=null;
-
-function initAx(){if(!ax){ax=new AC();}}
-function sfx(t){
-if(!ax)return;
-const o=ax.createOscillator(),g=ax.createGain(),n=ax.currentTime;
-o.connect(g);g.connect(ax.destination);
-if(t=='th'){
-o.type='triangle';o.frequency.setValueAtTime(150,n);o.frequency.linearRampToValueAtTime(300,n+.1);
-g.gain.setValueAtTime(.1,n);g.gain.linearRampToValueAtTime(0,n+.15);
-o.start(n);o.stop(n+.15);
-}else if(t=='die'){
-o.type='sawtooth';o.frequency.setValueAtTime(100,n);o.frequency.exponentialRampToValueAtTime(10,n+.4);
-g.gain.setValueAtTime(.3,n);g.gain.exponentialRampToValueAtTime(.01,n+.4);
-o.start(n);o.stop(n+.4);
-}else if(t=='coin'){
-o.type='sine';o.frequency.setValueAtTime(1200,n);o.frequency.exponentialRampToValueAtTime(2000,n+.1);
-g.gain.setValueAtTime(.1,n);g.gain.linearRampToValueAtTime(0,n+.1);
-o.start(n);o.stop(n+.1);
-}
-}
-function bass(){
-if(!ax||st!=='P')return;
-const t=ax.currentTime,o=ax.createOscillator(),g=ax.createGain();
-o.connect(g);g.connect(ax.destination);
-o.type='square';
-const f=(Math.floor(t*4)%4===0)?65.41:32.7;
-o.frequency.setValueAtTime(f,t);
-g.gain.setValueAtTime(.1,t);g.gain.exponentialRampToValueAtTime(.01,t+.2);
-o.start(t);o.stop(t+.2);
-setTimeout(bass,250);
-}
-
-function rsz(){w=window.innerWidth;h=window.innerHeight;dpr=window.devicePixelRatio||1;c.width=w*dpr;c.height=h*dpr;ctx.scale(dpr,dpr);if(st==='S')rst();}
-function rst(){p.x=w*.2;p.y=h*.5;p.vy=0;score=0;spd=6;obs.length=0;part.length=0;ring.length=0;sc.innerText='0';shk=0;}
-
-function spO(){
-const g=220,mn=100,mx=h-g-mn,y=Math.random()*(mx-mn)+mn;
-obs.push({x:w+50,w:60,y:y,g:g,p:false});
-if(Math.random()>.5)ring.push({x:w+80+Math.random()*100,y:y+g/2,r:15,c:false});
-}
-
-function boom(x,y,c){
-sfx('die');shk=25;
-for(let i=0;i<30;i++)part.push({x:x,y:y,vx:(Math.random()-.5)*20,vy:(Math.random()-.5)*20,l:1,c:c||`hsl(${Math.random()*60+180},100%,50%)`});
-}
-
-function upd(){
-let sx=0,sy=0;
-if(shk>0){sx=(Math.random()-.5)*shk;sy=(Math.random()-.5)*shk;shk*=.9;}
-ctx.save();ctx.translate(sx,sy);
-
-const bg=ctx.createLinearGradient(0,0,0,h);
-bg.addColorStop(0,'#0d0221'); // Lighter purple top
-bg.addColorStop(1,'#2a0a40'); // Lighter purple bottom
-ctx.fillStyle=bg;ctx.fillRect(-sx,-sy,w,h);
-
-// Sun
-const sunY=h*.6;
-ctx.fillStyle='#f09';ctx.shadowBlur=30;ctx.shadowColor='#f09';
-ctx.beginPath();ctx.arc(w/2,sunY,h*.3,0,Math.PI*2);ctx.fill();
-ctx.shadowBlur=0;
-ctx.fillStyle=bg;
-for(let i=0;i<10;i++)ctx.fillRect(w/2-h,sunY+(i*10)+(i*i),h*2,i*2);
-
-// Grid
-ctx.strokeStyle='rgba(0,255,255,.2)';ctx.lineWidth=1;
-const gw=100,go=(fr*spd)%gw;
-ctx.beginPath();
-for(let i=-2;i<w/gw+4;i++){
-let x=(i*gw-go+(w/2-p.x)*.5); 
-ctx.moveTo(x,h);ctx.lineTo((x-w/2)*.2+w/2,h*.4);
-}
-// Horizontals
-let hz=0,z=1;
-while(hz<h){
-let y=h-hz;
-ctx.moveTo(0,y);ctx.lineTo(w,y);
-hz+=z;z*=1.2;
-}
-ctx.stroke();
-
-if(st==='P'){
-if(inpt.a){p.vy-=.6;if(fr%6===0)sfx('th');
-part.push({x:p.x-20,y:p.y,vx:-5-Math.random()*5,vy:(Math.random()-.5)*2,l:.5,c:'#0ff'});
-}
-p.vy+=.25;p.vy*=.96;p.y+=p.vy;p.r=p.vy*.06;
-if(p.y<0||p.y>h)die();
-if(fr%80===0)spO();
-
-for(let i=obs.length-1;i>=0;i--){
-let o=obs[i];o.x-=spd;
-if(!o.p&&o.x<p.x){score++;sc.innerText=score;o.p=true;if(score%10===0)spd+=.5;}
-if(o.x<-100){obs.splice(i,1);continue;}
-if(p.x+15>o.x&&p.x-15<o.x+o.w&&(p.y-10<o.y||p.y+10>o.y+o.g))die();
-}
-for(let i=ring.length-1;i>=0;i--){
-let r=ring[i];r.x-=spd;
-const dx=p.x-r.x,dy=p.y-r.y,dist=Math.sqrt(dx*dx+dy*dy);
-if(dist<30){score+=5;sc.innerText=score;sfx('coin');ring.splice(i,1);
-for(let j=0;j<10;j++)part.push({x:r.x,y:r.y,vx:(Math.random()-.5)*10,vy:(Math.random()-.5)*10,l:.8,c:'#ff0'});
-}else if(r.x<-50)ring.splice(i,1);
-}
-}
-
-// Draw rings
-ctx.lineWidth=3;
-ring.forEach(r=>{
-ctx.strokeStyle='#fd0';ctx.shadowBlur=15;ctx.shadowColor='#ff0';
-ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,Math.PI*2);ctx.stroke();
-});
-
-// Draw Obs
-ctx.fillStyle='#0ff';ctx.shadowBlur=20;ctx.shadowColor='#0ff';
-obs.forEach(o=>{
-ctx.fillRect(o.x,0,o.w,o.y);
-ctx.fillRect(o.x,o.y+o.g,o.w,h);
-});
-
-// Draw Player
-if(st!=='O'){
-ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);
-ctx.shadowBlur=20;ctx.shadowColor='#f0f';ctx.fillStyle='#fff';
-// Jet body
-ctx.beginPath();
-ctx.moveTo(20,0);ctx.lineTo(-10,10);ctx.lineTo(-5,0);ctx.lineTo(-10,-10);
-ctx.fill();
-// Wings
-ctx.fillStyle='#f0f';
-ctx.beginPath();ctx.moveTo(-5,0);ctx.lineTo(-20,15);ctx.lineTo(-10,0);ctx.lineTo(-20,-15);
-ctx.fill();
-ctx.restore();
-}
-
-// Particles
-part.forEach((pt,i)=>{
-pt.x+=pt.vx;pt.y+=pt.vy;pt.l-=.03;
-if(pt.l<=0)part.splice(i,1);
-ctx.globalAlpha=pt.l;ctx.fillStyle=pt.c;ctx.shadowBlur=10;
-ctx.fillRect(pt.x,pt.y,4,4);
-});
-ctx.globalAlpha=1;
-
-ctx.restore();
-fr++;requestAnimationFrame(upd);
-}
-
-function die(){st='O';boom(p.x,p.y);ui.classList.remove('hidden');msg.innerHTML=`CRASHED<div class="sub">SCORE: ${score}</div>`;btn.innerText="REBOOT";}
-const strt=()=>{initAx();if(ax.state==='suspended')ax.resume();ui.classList.add('hidden');rst();st='P';bass();};
-const dn=(e)=>{if(e.target===btn){strt();return;}e.preventDefault();if(st==='P')inpt.a=true;};
-const up=(e)=>{e.preventDefault();inpt.a=false;};
-
-btn.addEventListener('click',strt);
-window.addEventListener('mousedown',dn);window.addEventListener('mouseup',up);
-window.addEventListener('touchstart',dn,{passive:false});window.addEventListener('touchend',up);
-window.addEventListener('resize',rsz);
-rsz();rst();upd();
-</script>
+    <div class="score" id="sc">0</div>
+    <div id="ui">
+        <div class="msg" id="msg">
+            NEON GLIDER
+            <div class="sub">HOLD SPACE / TOUCH TO ASCEND</div>
+        </div>
+        <button id="btn">INIT_SYSTEM</button>
+    </div>
+    <canvas id="c"></canvas>
+    <script src="script.js"></script>
 </body>
 </html>
